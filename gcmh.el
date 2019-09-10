@@ -76,14 +76,7 @@ This is to be used with the `pre-command-hook'."
 
 (defun gcmh-idle-garbage-collect ()
   "Run garbage collection after `gcmh-idle-delay'."
-  (if gcmh-verbose
-      (let ((message-log-max nil))
-        (message "Garbage collecting...")
-        (let ((msg (format "Garbage Collector ran for %.06f sec"
-                           (gcmh-time (garbage-collect)))))
-          (message msg)
-          (gcmh-log msg)))
-    (garbage-collect))
+  (garbage-collect)
   (setq gc-cons-threshold gcmh-low-cons-threshold))
 
 (defun gcmh-log (msg)
@@ -93,6 +86,18 @@ This is to be used with the `pre-command-hook'."
       (let ((inhibit-read-only t))
         (goto-char (point-max))
         (insert (format-time-string "[%F %X] ") msg "\n")))))
+
+(defun gcmh-log-advice (orig)
+  "Run ORIG with optional logging."
+  (let ((message-log-max nil))
+    (when gcmh-verbose (message "Garbage collecting..."))
+    (let* ((time (current-time))
+           (result (funcall orig))
+           (duration (float-time (time-since time)))
+           (msg (format "Garbage Collector ran for %.06f sec" duration)))
+      (when gcmh-verbose (message msg))
+      (gcmh-log msg)
+      result)))
 
 ;;;###autoload
 (define-minor-mode gcmh-mode
@@ -107,11 +112,13 @@ This is to be used with the `pre-command-hook'."
                                                     #'gcmh-idle-garbage-collect))
         (with-current-buffer (get-buffer-create gcmh-log-buffer)
           (read-only-mode 1))
+        (advice-add #'garbage-collect :around #'gcmh-log-advice)
         ;; Release severe GC strategy before the user restart to working
         (add-hook 'pre-command-hook #'gcmh-set-high-threshold))
     (cancel-timer gcmh-idle-timer)
     (setq gc-cons-threshold gcmh-low-cons-threshold
           gcmh-idle-timer nil)
+    (advice-remove #'garbage-collect #'gcmh-log-advice)
     (remove-hook 'pre-command-hook #'gcmh-set-high-threshold)))
 
 (provide 'gcmh)
