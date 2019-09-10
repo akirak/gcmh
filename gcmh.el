@@ -34,6 +34,8 @@
 
 ;;; Code:
 
+(defconst gcmh-log-buffer "*gcmh GC log*")
+
 (defcustom gcmh-low-cons-threshold 800000
   "Low cons gc threshold.
 This is the gc threshold used while while idling. Default value
@@ -77,10 +79,20 @@ This is to be used with the `pre-command-hook'."
   (if gcmh-verbose
       (let ((message-log-max nil))
         (message "Garbage collecting...")
-        (message "Garbage Collector ran for %.06f sec"
-                 (gcmh-time (garbage-collect))))
+        (let ((msg (format "Garbage Collector ran for %.06f sec"
+                           (gcmh-time (garbage-collect)))))
+          (message msg)
+          (gcmh-log msg)))
     (garbage-collect))
   (setq gc-cons-threshold gcmh-low-cons-threshold))
+
+(defun gcmh-log (msg)
+  "Log MSG to `gcmh-log-buffer' with the current time."
+  (when-let ((buffer (get-buffer gcmh-log-buffer)))
+    (with-current-buffer buffer
+      (let ((inhibit-read-only t))
+        (goto-char (point-max))
+        (insert (format-time-string "[%F %X] ") msg "\n")))))
 
 ;;;###autoload
 (define-minor-mode gcmh-mode
@@ -93,6 +105,8 @@ This is to be used with the `pre-command-hook'."
                ;; When idle for gcmh-idle-delay, run the GC no matter what.
                gcmh-idle-timer (run-with-idle-timer gcmh-idle-delay t
                                                     #'gcmh-idle-garbage-collect))
+        (with-current-buffer (get-buffer-create gcmh-log-buffer)
+          (read-only-mode 1))
         ;; Release severe GC strategy before the user restart to working
         (add-hook 'pre-command-hook #'gcmh-set-high-threshold))
     (cancel-timer gcmh-idle-timer)
