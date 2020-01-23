@@ -79,6 +79,9 @@ This is to be used with the `pre-command-hook'."
   (garbage-collect)
   (setq gc-cons-threshold gcmh-low-cons-threshold))
 
+(defun gcmh-message (format-string &rest args)
+  (apply #'message format-string args))
+
 (defun gcmh-log (msg)
   "Log MSG to `gcmh-log-buffer' with the current time."
   (when-let ((buffer (get-buffer gcmh-log-buffer)))
@@ -90,12 +93,13 @@ This is to be used with the `pre-command-hook'."
 (defun gcmh-log-advice (orig)
   "Run ORIG with optional logging."
   (let ((message-log-max nil))
-    (when gcmh-verbose (message "Garbage collecting..."))
+    ;; (when gcmh-verbose (gcmh-message "Garbage collecting..."))
     (let* ((time (current-time))
            (result (funcall orig))
            (duration (float-time (time-since time)))
-           (msg (format "Garbage Collector ran for %.06f sec" duration)))
-      (when gcmh-verbose (message msg))
+           (msg (format "GC ran (%.02fs)" duration)))
+      (when gcmh-verbose
+        (gcmh-message msg))
       (gcmh-log msg)
       result)))
 
